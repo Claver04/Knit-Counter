@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Knitting Counter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .project, .project-part {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .counter {
+            font-size: 2em;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px;
+            margin: 5px;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .back-button {
+            background-color: #6c757d;
+        }
+        .back-button:hover {
+            background-color: #5a6268;
+        }
+        .stop-button {
+            background-color: #dc3545;
+        }
+        .stop-button:hover {
+            background-color: #c82333;
+        }
+        .unfinish-button {
+            background-color: #28a745;
+        }
+        .unfinish-button:hover {
+            background-color: #218838;
+        }
+        .delete-button {
+            background-color: #dc3545;
+        }
+        .delete-button:hover {
+            background-color: #c82333;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            resize: vertical;
+        }
+        .step-container {
+            display: flex;
+            align-items: center;
+        }
+        .step-container input {
+            margin-left: 10px;
+            width: 60px;
+        }
+        .counter-container {
+            display: flex;
+            align-items: center;
+        }
+        .counter-container .counter {
+            font-size: 2.5em;
+        }
+        .counter-button {
+            background: none;
+            border: none;
+            font-size: 2em;
+            color: #007BFF;
+            cursor: pointer;
+            padding: 0;
+        }
+        .counter-button:hover {
+            color: #0056b3;
+        }
+        .timer {
+            font-size: 3em;
+        }
+        .collapse-button {
+            background-color: #f0ad4e;
+        }
+        .collapse-button:hover {
+            background-color: #ec971f;
+        }
+    </style>
+</head>
+<body>
+
+<div id="start-page">
+    <h1>Knitting Counter</h1>
+    <button onclick="createNewProject()">Nieuw Project Maken</button>
+    <div id="project-list"></div>
+    <h2>Voltooide Projecten</h2>
+    <div id="finished-projects"></div>
+</div>
+
+<div id="project-page" style="display: none;">
+    <button class="back-button" onclick="goBackToStart()">Terug naar Start</button>
+    <h1 id="project-name"></h1>
+    <button onclick="addProjectPart()">Projectdeel Toevoegen</button>
+    <div id="project-parts"></div>
+    <button onclick="finishProject()">Project Voltooien</button>
+</div>
+
+<script>
+    let projects = [];
+    let finishedProjects = [];
+    let currentProject = null;
+    let timers = {};
+    let timerData = {};
+
+    function createNewProject() {
+        let projectName = prompt("Geef uw project een naam:");
+        if (projectName) {
+            let projectId = "project-" + Date.now();
+            projects.push({ id: projectId, name: projectName, parts: [] });
+            updateProjectList();
+        }
+    }
+
+    function updateProjectList() {
+        let projectList = document.getElementById("project-list");
+        projectList.innerHTML = "";
+        projects.forEach(project => {
+            projectList.innerHTML += `<div class='project'><span>${project.name}</span> <button onclick="openProject('${project.id}')">Open</button></div>`;
+        });
+
+        let finishedList = document.getElementById("finished-projects");
+        finishedList.innerHTML = "";
+        finishedProjects.forEach(project => {
+            finishedList.innerHTML += `<div class='project'><span>${project.name} ✅</span> <button onclick="openProject('${project.id}', true)">Open</button> <button class="unfinish-button" onclick="unfinishProject('${project.id}')">Unfinish</button></div>`;
+        });
+    }
+
+    function openProject(projectId, isFinished = false) {
+        currentProject = (isFinished ? finishedProjects : projects).find(p => p.id === projectId);
+        document.getElementById("start-page").style.display = "none";
+        document.getElementById("project-page").style.display = "block";
+        document.getElementById("project-name").innerText = currentProject.name;
+        renderProjectParts();
+    }
+
+    function goBackToStart() {
+        document.getElementById("project-page").style.display = "none";
+        document.getElementById("start-page").style.display = "block";
+    }
+
+    function addProjectPart() {
+        const partId = "part-" + Date.now();
+        currentProject.parts.push({ 
+            id: partId, 
+            name: "", 
+            counter: 0, 
+            counter2: 0, 
+            stepSize: 1, 
+            stepSize2: 1, 
+            timer: "00:00:00", 
+            interval: null, 
+            pattern: "", 
+            collapsed: false 
+        });
+        renderProjectParts();
+    }
+
+    function renderProjectParts() {
+        const projectParts = document.getElementById("project-parts");
+        projectParts.innerHTML = "";
+        currentProject.parts.forEach(part => {
+            projectParts.innerHTML += `
+                <div class="project-part" id="${part.id}">
+                    <div class="project-part-header">
+                        <input type="text" value="${part.name}" placeholder="Geef dit deel een naam..." onchange="updatePartName('${part.id}', this.value)">
+                        <button class="collapse-button" onclick="toggleCollapse('${part.id}')">${part.collapsed ? "Uitklappen" : "Inklappen"}</button>
+                    </div>
+                    
+                    <div class="counter-container" style="display: ${part.collapsed ? 'none' : 'flex'};">
+                        <div class="counter" id="counter-${part.id}">${part.counter}</div>
+                        <button class="counter-button" onclick="incrementCounter('${part.id}', 1)">+</button>
+                        <button class="counter-button" onclick="incrementCounter('${part.id}', -1)">-</button>
+                    </div>
+
+                    <div class="step-container" style="display: ${part.collapsed ? 'none' : 'flex'};">
+                        <label>Stapgrootte 1: </label>
+                        <input type="number" id="step-size-${part.id}" value="${part.stepSize}" min="1" onchange="updateStepSize('${part.id}', this.value)">
+                    </div>
+
+                    <div class="counter-container" style="display: ${part.collapsed ? 'none' : 'flex'};">
+                        <div class="counter" id="counter2-${part.id}">${part.counter2}</div>
+                        <button class="counter-button" onclick="incrementCounter2('${part.id}', 1)">+</button>
+                        <button class="counter-button" onclick="incrementCounter2('${part.id}', -1)">-</button>
+                    </div>
+
+                    <div class="step-container" style="display: ${part.collapsed ? 'none' : 'flex'};">
+                        <label>Stapgrootte 2: </label>
+                        <input type="number" id="step-size2-${part.id}" value="${part.stepSize2}" min="1" onchange="updateStepSize2('${part.id}', this.value)">
+                    </div>
+
+                    <div class="timer" id="timer-${part.id}" style="display: ${part.collapsed ? 'none' : 'block'};">${part.timer}</div>
+                    <button onclick="startTimer('${part.id}')" style="display: ${part.collapsed ? 'none' : 'inline-block'};">Start Timer</button>
+                    <button class="stop-button" onclick="stopTimer('${part.id}')" style="display: ${part.collapsed ? 'none' : 'inline-block'};">Stop Timer</button>
+
+                    <textarea placeholder="Voer hier het patroon in..." onchange="updatePattern('${part.id}', this.value)" style="display: ${part.collapsed ? 'none' : 'block'};">${part.pattern}</textarea>
+                    <button class="delete-button" onclick="deleteProjectPart('${part.id}')">Verwijder Deel</button>
+                </div>
+            `;
+        });
+    }
+
+    function updatePartName(partId, newName) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        if (currentProject.parts.some(p => p.name === newName && p.id !== partId)) {
+            alert("Deze naam is al in gebruik binnen dit project. Kies een andere naam.");
+            return;
+        }
+        part.name = newName;
+    }
+
+    function updateStepSize(partId, newStepSize) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        part.stepSize = parseInt(newStepSize);
+    }
+
+    function updateStepSize2(partId, newStepSize2) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        part.stepSize2 = parseInt(newStepSize2);
+    }
+
+    function updatePattern(partId, newPattern) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        part.pattern = newPattern;
+    }
+
+    function incrementCounter(partId, value) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        part.counter += value * part.stepSize;
+        document.getElementById(`counter-${partId}`).innerText = part.counter;
+    }
+
+    function incrementCounter2(partId, value) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        part.counter2 += value * part.stepSize2;
+        document.getElementById(`counter2-${partId}`).innerText = part.counter2;
+    }
+
+    function startTimer(partId) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        if (part.interval) return;
+
+        let [hours, minutes, seconds] = part.timer.split(":"), h = parseInt(hours), m = parseInt(minutes), s = parseInt(seconds);
+        part.interval = setInterval(() => {
+            s++;
+            if (s >= 60) { s = 0; m++; }
+            if (m >= 60) { m = 0; h++; }
+            part.timer = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            document.getElementById(`timer-${partId}`).innerText = part.timer;
+        }, 1000);
+    }
+
+    function stopTimer(partId) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        clearInterval(part.interval);
+        part.interval = null;
+    }
+
+    function toggleCollapse(partId) {
+        let part = currentProject.parts.find(p => p.id === partId);
+        part.collapsed = !part.collapsed;
+        renderProjectParts();
+    }
+
+    function finishProject() {
+        if (currentProject) {
+            finishedProjects.push(currentProject);
+            projects = projects.filter(p => p.id !== currentProject.id);
+            updateProjectList();
+            goBackToStart();
+        }
+    }
+
+    function unfinishProject(projectId) {
+        let project = finishedProjects.find(p => p.id === projectId);
+        if (project) {
+            finishedProjects = finishedProjects.filter(p => p.id !== projectId);
+            projects.push(project);
+            updateProjectList();
+        }
+    }
+
+    function deleteProjectPart(partId) {
+        currentProject.parts = currentProject.parts.filter(p => p.id !== partId);
+        renderProjectParts();
+    }
+</script>
+
+</body>
+</html>
